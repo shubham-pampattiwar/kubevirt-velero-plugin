@@ -128,6 +128,12 @@ var _ = Describe("DV Backup", func() {
 			dv, err = framework.CreateDataVolumeFromDefinition(f.KvClient, f.Namespace.Name, dvSpec)
 			Expect(err).ToNot(HaveOccurred())
 
+			By("Deleting source pod so clone can proceed")
+			framework.DeletePod(f.KvClient, sourceNamespace.Name, sourcePod.Name)
+
+			By("Waiting for clone DV to succeed")
+			framework.EventuallyDVWith(f.KvClient, f.Namespace.Name, dvName, 180, HaveSucceeded())
+
 			By("Creating backup test-backup")
 			err = framework.CreateBackupForNamespace(timeout, backupName, f.Namespace.Name, snapshotLocation, f.BackupNamespace, true)
 			Expect(err).ToNot(HaveOccurred())
@@ -142,9 +148,6 @@ var _ = Describe("DV Backup", func() {
 			ok, err := framework.WaitDataVolumeDeleted(f.KvClient, f.Namespace.Name, dv.Name)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ok).To(BeTrue())
-
-			By("Deleting source pod")
-			framework.DeletePod(f.KvClient, sourceNamespace.Name, sourcePod.Name)
 
 			By("Creating restore test-restore")
 			err = framework.CreateRestoreForBackup(timeout, backupName, restoreName, f.BackupNamespace, true)

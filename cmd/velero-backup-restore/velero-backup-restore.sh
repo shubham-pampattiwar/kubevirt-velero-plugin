@@ -295,15 +295,14 @@ verify_restore_completion() {
 }
 
 # Function to verify selective restore completion
-# Selective restores may get stuck in Finalizing when PVCs cannot bind
 verify_selective_restore_completion() {
   local restore_name=$1
   local namespace=$2
-  local max_wait=180  # 3 minutes
-  local interval=2
+  local max_wait=300  # 5 minutes — PV patching in Finalizing can take a while
+  local interval=5
   local elapsed=0
 
-  echo "Waiting for selective restore to reach terminal state..."
+  echo "Waiting for selective restore to complete..."
 
   while [ $elapsed -lt $max_wait ]; do
     local get_restore="$VELERO_CLI restore get $restore_name -n $namespace -o json"
@@ -312,18 +311,22 @@ verify_selective_restore_completion() {
 
     echo "Current restore phase: $restore_phase (elapsed: ${elapsed}s)"
 
-    # Accept Completed, PartiallyFailed, or Finalizing as terminal states
-    # Finalizing happens when PVCs can't bind (no VM/pod to consume them)
-    if [ "$restore_phase" == "Completed" ] || [ "$restore_phase" == "PartiallyFailed" ] || [ "$restore_phase" == "Finalizing" ]; then
-      echo "Selective restore reached terminal state: $restore_phase"
+    if [ "$restore_phase" == "Completed" ] || [ "$restore_phase" == "PartiallyFailed" ]; then
+      echo "Selective restore completed: $restore_phase"
       return 0
+    fi
+
+    if [ "$restore_phase" == "Failed" ]; then
+      echo "Error: Selective restore failed: $restore_phase"
+      dump_restore_details "$restore_name" "$namespace"
+      exit 1
     fi
 
     sleep $interval
     elapsed=$((elapsed + interval))
   done
 
-  echo "Error: Selective restore did not reach terminal state within ${max_wait}s"
+  echo "Error: Selective restore did not complete within ${max_wait}s. Last status: $restore_phase"
   dump_restore_details "$restore_name" "$namespace"
   exit 1
 }
