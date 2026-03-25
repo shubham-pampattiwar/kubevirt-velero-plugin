@@ -16,6 +16,9 @@
 
 set -e
 
+VELERO_NAMESPACE=${VELERO_NAMESPACE:-velero}
+VOLUME_SNAPSHOT_CLASS=${VOLUME_SNAPSHOT_CLASS:-csi-rbdplugin-snapclass}
+
 if [ -z "$KUBEVIRTCI_PATH" ]; then
     KUBEVIRTCI_PATH="$(
         cd "$(dirname "$BASH_SOURCE[0]")/"
@@ -42,6 +45,7 @@ if [[ ! $(_kubectl get deployments -n velero | grep velero) ]]; then
   echo "Plugins: ${PLUGINS}"
 
   ${VELERO_DIR}/velero install \
+    --namespace ${VELERO_NAMESPACE} \
     --provider aws \
     --plugins ${PLUGINS} \
     --bucket velero \
@@ -56,5 +60,5 @@ if [[ ! $(_kubectl get deployments -n velero | grep velero) ]]; then
   _kubectl patch deployment velero -n velero --type='json' \
     -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--resource-timeout=20m"}]'
   _kubectl rollout status deployment/velero -n velero --timeout=${DEPLOYMENT_TIMEOUT}s
-  _kubectl label volumesnapshotclass/csi-rbdplugin-snapclass velero.io/csi-volumesnapshot-class=true --overwrite=true
+  _kubectl label volumesnapshotclass/${VOLUME_SNAPSHOT_CLASS} velero.io/csi-volumesnapshot-class=true --overwrite=true
 fi
